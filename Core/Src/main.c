@@ -131,7 +131,7 @@ const unsigned char font_regular[94][6] =
     {0x00, 0x63, 0x14, 0x08, 0x14, 0x63},   // X
     {0x00, 0x07, 0x08, 0x70, 0x08, 0x07},   // Y
     {0x00, 0x61, 0x51, 0x49, 0x45, 0x43},   // Z
-    {0x00, 0x00, 0x7F, 0x41, 0x41, 0x00},   // [
+    {0x00, 0x00, 0x7F, 0x41, 0x41, 0x00},   // [ 
     {0x00, 0x02, 0x04, 0x08, 0x10, 0x20},   // \
     {0x00, 0x00, 0x06, 0x09, 0x09, 0x06},   // ] 
     {0x00, 0x00, 0x06, 0x09, 0x09, 0x06},   // ^ Градус )
@@ -180,6 +180,7 @@ void SSD1309_DrawChar(uint8_t x, uint8_t y, char character); // Отрисовк
 void SSD1309_DrawString(uint8_t x, uint8_t y, const char *str); // Отрисовка строки
 void SSD1309_DisplayTemperature(int temp); // Отображение температуры
 void SSD1309_DrawBigChar(uint8_t x, uint8_t y, uint8_t index); // Большие символы
+void SSD1309_DrawBigPoint(uint8_t x, uint8_t y); // Рисуем точку
 void SSD1309_DrawBigString(uint8_t x, uint8_t y, const char *str); // Строка Больших симовлов
 /* USER CODE END PFP */
 
@@ -224,10 +225,13 @@ int main(void)
   // Очистка экрана
   SSD1309_Clear();
   
-  int temperature = 23; // Чтение температуры
-  SSD1309_DisplayTemperature(temperature); // Отображение температуры
-
-  SSD1309_DrawBigString(40, 2, "23C" ); //вывод больших цифр
+  int temperature = 366; // 36.6 градуса
+  
+  while (1)
+  {
+    SSD1309_DisplayTemperature(temperature); // Отображение температуры
+    HAL_Delay(100); // Задержка 100 мс
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -383,18 +387,39 @@ void SSD1309_DrawString(uint8_t x, uint8_t y, const char *str) {
 }
 
 void SSD1309_DisplayTemperature(int temp) {
+    static int last_temp = -1000; // Храним предыдущее значение температуры
   char buffer[10];
+    
+    // Если температура не изменилась, не обновляем экран
+    if (temp == last_temp) {
+        return;
+    }
+    last_temp = temp;
+    
+    // Очищаем только область с температурой
+    for (uint8_t page = 0; page < 3; page++) {
+        SSD1309_SetPosition(0, page);
+        for (uint8_t i = 0; i < 128; i++) {
+            SSD1309_WriteData(0x00);
+        }
+    }
+    
   if (temp < 0) {
       SSD1309_DrawChar(0, 2, '-'); // Отрисовка минуса
       temp = -temp; // Преобразуем температуру в положительное число
   }
-  sprintf(buffer, "%d", temp); // Преобразуем температуру в строку
+    
+    // Форматируем строку с одним знаком после запятой
+    sprintf(buffer, "%d.%d", temp / 10, temp % 10);
 
   // Отображение температуры обычным шрифтом
-  SSD1309_DrawString(0, 0, "ZNP"); // Выводим слово "TEMP"
+    SSD1309_DrawString(0, 0, "ZNP"); // Выводим слово "ZNP"
   SSD1309_DrawString(0, 2, buffer); // Выводим значение температуры
   SSD1309_DrawChar(6 * strlen(buffer), 2, 93); // Символ градуса
   SSD1309_DrawChar(6 * strlen(buffer) + 6, 2, 'C'); // Символ 'C'
+    
+    // Отображение температуры большим шрифтом
+    SSD1309_DrawBigString(40, 2, buffer); // Выводим то же значение большими цифрами
 }
 
 void SSD1309_DrawBigChar(uint8_t x, uint8_t y, uint8_t index) {
@@ -484,19 +509,24 @@ void SSD1309_DrawBigChar(uint8_t x, uint8_t y, uint8_t index) {
     }
 }
 
+void SSD1309_DrawBigPoint(uint8_t x, uint8_t y) {
+    // Рисуем точку размером 2x2 пикселя
+    SSD1309_SetPosition(x, y + 4);
+    SSD1309_WriteData(0xC0);
+    SSD1309_WriteData(0xC0);
+}
+
 void SSD1309_DrawBigString(uint8_t x, uint8_t y, const char *str) {
     while (*str) {
         uint8_t index;
         if (*str >= '0' && *str <= '9') {
             index = *str - '0';
-        } else if (*str == 'C') {
-            index = 10; // Индекс для символа 'C' в массиве Proba20x34
-        } else {
-            str++;
-            continue;
+            SSD1309_DrawBigChar(x, y, index);
+            x += 23; // Ширина символа 20 пикселей + 3 пикселя пробела
+        } else if (*str == '.') {
+            SSD1309_DrawBigPoint(x - 3, y); // Рисуем точку с учетом пробела
+            x += 3; // Добавляем пробел после точки
         }
-        SSD1309_DrawBigChar(x, y, index);
-        x += 20; // Ширина символа 20 пикселей
         str++;
     }
 }
